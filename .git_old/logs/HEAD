@@ -1,0 +1,20 @@
+0000000000000000000000000000000000000000 3e3935ff2faab96e40fd7bee19aa14f455bcd4ef JOSHISHUBHAM07 <sj6573682@gmail.com> 1753105348 +0530	commit (initial): Initial commit
+3e3935ff2faab96e40fd7bee19aa14f455bcd4ef 0000000000000000000000000000000000000000 JOSHISHUBHAM07 <sj6573682@gmail.com> 1753105349 +0530	Branch: renamed refs/heads/master to refs/heads/main
+0000000000000000000000000000000000000000 3e3935ff2faab96e40fd7bee19aa14f455bcd4ef JOSHISHUBHAM07 <sj6573682@gmail.com> 1753105349 +0530	Branch: renamed refs/heads/master to refs/heads/main
+3e3935ff2faab96e40fd7bee19aa14f455bcd4ef 3e3935ff2faab96e40fd7bee19aa14f455bcd4ef JOSHISHUBHAM07 <sj6573682@gmail.com> 1753105542 +0530	checkout: moving from main to deploy
+3e3935ff2faab96e40fd7bee19aa14f455bcd4ef 0000000000000000000000000000000000000000 JOSHISHUBHAM07 <sj6573682@gmail.com> 1753105832 +0530	Branch: renamed refs/heads/deploy to refs/heads/main
+0000000000000000000000000000000000000000 3e3935ff2faab96e40fd7bee19aa14f455bcd4ef JOSHISHUBHAM07 <sj6573682@gmail.com> 1753105832 +0530	Branch: renamed refs/heads/deploy to refs/heads/main
+3e3935ff2faab96e40fd7bee19aa14f455bcd4ef 3e3935ff2faab96e40fd7bee19aa14f455bcd4ef JOSHISHUBHAM07 <sj6573682@gmail.com> 1753106174 +0530	checkout: moving from main to feature/deploy
+3e3935ff2faab96e40fd7bee19aa14f455bcd4ef 470734ed0ff9681469407873669ca05dc42537b7 JOSHISHUBHAM07 <sj6573682@gmail.com> 1753193185 +0530	commit: Initial Glamo AI commit
+470734ed0ff9681469407873669ca05dc42537b7 8af9285f89cee946cd8a5d21e0584ce3f3ca4bae JOSHISHUBHAM07 <sj6573682@gmail.com> 1753193273 +0530	commit: Remove .env and add to .gitignore
+8af9285f89cee946cd8a5d21e0584ce3f3ca4bae a8eb9d212f037153215855d6952329640c50a6c4 JOSHISHUBHAM07 <sj6573682@gmail.com> 1753193273 +0530	filter-branch: rewrite
+a8eb9d212f037153215855d6952329640c50a6c4 0000000000000000000000000000000000000000 JOSHISHUBHAM07 <sj6573682@gmail.com> 1753193592 +0530	Branch: renamed refs/heads/feature/deploy to refs/heads/main
+a8eb9d212f037153215855d6952329640c50a6c4 e0c04c95bedc8706a3e0b1aea9239ee40d3acc96 JOSHISHUBHAM07 <sj6573682@gmail.com> 1753982609 +0530	commit: Yellow CSS Update
+e0c04c95bedc8706a3e0b1aea9239ee40d3acc96 a8eb9d212f037153215855d6952329640c50a6c4 JOSHISHUBHAM07 <sj6573682@gmail.com> 1753982928 +0530	reset: moving to HEAD~1
+a8eb9d212f037153215855d6952329640c50a6c4 f2baee1564c39f34e3189781123318f26bd096a8 JOSHISHUBHAM07 <sj6573682@gmail.com> 1753982956 +0530	commit: Yellow CSS Update
+f2baee1564c39f34e3189781123318f26bd096a8 99c73e2825130e27fd679f2b88a0b89ce272fabc JOSHISHUBHAM07 <sj6573682@gmail.com> 1754226918 +0530	commit: Update Glamo: prompt accuracy, styling, and music filtering improvements
+99c73e2825130e27fd679f2b88a0b89ce272fabc b17a3629943913001716025acbd5af55d7c5a514 JOSHISHUBHAM07 <sj6573682@gmail.com> 1754227095 +0530	commit: Deploy-ready code updates and config for Render
+b17a3629943913001716025acbd5af55d7c5a514 1c525d5786d2b388b0dce2974b52dbe3c118f3fb JOSHISHUBHAM07 <sj6573682@gmail.com> 1754227959 +0530	commit: Add gunicorn for Render deployment
+1c525d5786d2b388b0dce2974b52dbe3c118f3fb a95ac962fc56ed6d4addf278f38b430b5368a3d1 JOSHISHUBHAM07 <sj6573682@gmail.com> 1754228206 +0530	commit: Update app for Render deployment
+a95ac962fc56ed6d4addf278f38b430b5368a3d1 a95ac962fc56ed6d4addf278f38b430b5368a3d1 JOSHISHUBHAM07 <sj6573682@gmail.com> 1754228337 +0530	checkout: moving from feature/deploy to fix-deploy
+a95ac962fc56ed6d4addf278f38b430b5368a3d1 a95ac962fc56ed6d4addf278f38b430b5368a3d1 JOSHISHUBHAM07 <sj6573682@gmail.com> 1754228549 +0530	checkout: moving from fix-deploy to deploy-final

@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Glamo - AI Photo Editing Assistant</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="icon" href="/static/favicon.png" type="image/png">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.lordicon.com/lordicon.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/vanilla-tilt@1.7.2/dist/vanilla-tilt.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+</head>
+
+<body>
+
+  <!-- 🎈 Bubbles Background -->
+  <div class="bubbles"></div>
+
+  <!-- 🌗 Theme Switcher -->
+  <div class="theme-switcher">
+    <button onclick="toggleTheme()">🌙/☀️</button>
+  </div>
+
+  <div class="container">
+    <h1 id="heroTitle">📸 Glamo - AI Photo Editing Assistant</h1>
+
+    <!-- ✨ Floating Icon -->
+    <lord-icon src="https://cdn.lordicon.com/wmlleaaf.json" trigger="loop" delay="1500"
+      colors="primary:#ffffff,secondary:#ff4f8b" style="width:60px;height:60px;margin-top: 10px;">
+    </lord-icon>
+
+    <!-- 📤 Upload Form -->
+    <form id="editForm" enctype="multipart/form-data">
+      <label>Select a photo:</label>
+      <input type="file" id="photo" name="photo" accept="image/*" required class="form-item" />
+      <img id="photoPreview" src="#" alt="Preview" style="display:none; max-width: 100%; margin: 10px 0;" />
+
+      <label>Select your editing app:</label>
+      <select name="app" required class="form-item">
+        <option value="">--Choose App--</option>
+        <option value="iphone">iPhone Photos App</option>
+        <option value="vsco">VSCO</option>
+        <option value="lightroom">Lightroom</option>
+        <option value="snapseed">Snapseed</option>
+        <option value="picsart">Picsart</option>
+      </select>
+
+      <label>Select style:</label>
+      <select name="style" id="styleSelector" required class="form-item">
+        <option value="">--Choose Style--</option>
+        <option value="Vibrant & Vivid" data-desc="Punchy colors and bold contrast.">Vibrant & Vivid</option>
+        <option value="Bright & Airy" data-desc="Soft whites, natural light, clean tones.">Bright & Airy</option>
+        <option value="Cinematic / Teal & Orange" data-desc="Film-like tones with teal and warm hues.">Cinematic / Teal
+          & Orange</option>
+        <option value="Moody & Dark" data-desc="Muted shadows, high contrast, deep tones.">Moody & Dark</option>
+        <option value="Soft Pastel" data-desc="Delicate, low saturation pastel colors.">Soft Pastel</option>
+        <option value="Black & White / Monochrome" data-desc="No color, high detail, dramatic.">Black & White /
+          Monochrome</option>
+        <option value="Retro / Vintage / Film Style" data-desc="Old film aesthetics, grain, warm hues.">Retro / Vintage
+          / Film Style</option>
+        <option value="Golden Hour Glow" data-desc="Warm highlights and soft orange tones.">Golden Hour Glow</option>
+        <option value="AI Enhance + Background Blur" data-desc="Boosted clarity with blurred background.">AI Enhance +
+          Background Blur</option>
+      </select>
+      <!-- 🔮 Ask AI for Style & App -->
+      <button type="button" onclick="getStyleApp()"
+        style="margin-top:10px; background:#ffcc00; color:#000; padding:8px 12px; border:none; border-radius:8px; font-weight:bold;">🔮
+        Suggest Best Style & App</button>
+
+      <div id="styleAppResult"
+        style="display:none; background:#2b2b2b; padding:10px; margin-top:10px; border-radius:8px; color:#fff9c0;">
+      </div>
+
+
+      <!-- 🧾 Live Description Box -->
+      <div id="styleDescription" class="form-item" style="font-style: italic; font-size: 14px; color: #ccc;"></div>
+
+
+      <button type="submit" class="form-item">✨ Get Editing Suggestions</button>
+    </form>
+
+    <!-- ⏳ Loading -->
+    <div class="loading" id="loading"><span></span><span></span><span></span></div>
+
+    <!-- ✅ Updated inside <div id="result"> -->
+    <div id="result" style="display: none;">
+      <h2>🎯 Your Personalized Editing Guide</h2>
+
+      <!-- 🧠 Mood & Scene Detector -->
+      <div>
+        <h3>🧠 Mood & Scene</h3>
+        <pre class="edit-category" id="moodInfo" style="white-space: pre-wrap;"></pre>
+      </div>
+
+
+      <!-- 🎚️ Editing Steps -->
+      <div>
+        <h3>🎛️ Editing Steps</h3>
+        <div class="editing-values-container" id="editingValues"></div>
+      </div>
+
+      <!-- 📝 Captions -->
+      <div>
+        <h3>📝 Captions for Instagram</h3>
+        <div class="caption-list-container" id="captionList"></div>
+      </div>
+
+      <!-- 🎵 Music Suggestions -->
+      <div>
+        <h3>🎵 Music Suggestions</h3>
+        <div class="music-box" id="englishSongs"></div>
+      </div>
+
+      <!-- 👣 Footer -->
+      <footer>
+        Made with ❤️ by Shubham Joshi |
+        <a href="https://github.com" target="_blank">GitHub</a> |
+        <a href="https://instagram.com" target="_blank">Instagram</a>
+      </footer>
+    </div>
+
+    <!-- 🎨 Bubble Background Script -->
+    <script>
+      for (let i = 0; i < 20; i++) {
+        const b = document.createElement('div');
+        b.className = 'bubble';
+        b.style.setProperty('--i', Math.random());
+        document.querySelector('.bubbles').appendChild(b);
+      }
+    </script>
+
+    <!-- 🔄 Tilt Init -->
+    <script>
+      window.addEventListener("load", () => {
+        VanillaTilt.init(document.querySelectorAll(".edit-category, .caption-card"), {
+          max: 10,
+          speed: 400,
+          glare: true,
+          "max-glare": 0.2,
+        });
+      });
+    </script>
+
+    <!-- 📜 JS Logic -->
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+    <!-- 🤖 Glamo Chat Assistant -->
+    <!-- <div id="chatBot" style="margin-top: 40px;"> -->
+
+    <!-- 🤖 Floating Chat Assistant -->
+    <!-- 💬 Floating Chat Icon + Box -->
+    <!-- <div id="chatWidget"> -->
+    <!-- Icon Button -->
+    <div id="chatToggleBtn" onclick="toggleChatWidget()">💬</div>
+
+    <!-- Hidden Chat Box -->
+    <div id="chatContainer" style="display: none;">
+      <div id="chatBot">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <h3 style="margin: 0;">Ask Glamo</h3>
+          <button onclick="toggleChatWidget()"
+            style="background:none;border:none;color:#fff;font-size:18px;">✖️</button>
+        </div>
+
+        <div id="chatBox"></div>
+        <input type="text" id="chatInput" placeholder="Ask something..." />
+        <button onclick="sendChat()">Send</button>
+
+        <div id="quickQuestions">
+          <p style="color: #fff9c0; font-weight: bold;">Quick Questions:</p>
+          <button onclick="askQuick('How do I use Glamo?')">How do I use Glamo?</button>
+          <button onclick="askQuick('Best style for Instagram reels?')">Best Style?</button>
+          <button onclick="askQuick('Snapseed vs VSCO – which to use?')">Snapseed vs VSCO</button>
+          <button onclick="askQuick('Can I get captions and songs here?')">Captions & Songs</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+
+</body>
+
+</html>
