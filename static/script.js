@@ -9,9 +9,7 @@ function toggleTheme() {
 // Load saved theme and animations
 window.addEventListener("DOMContentLoaded", () => {
   const savedTheme = localStorage.getItem("theme");
-  if (savedTheme === "light") {
-    document.body.classList.add("light-mode");
-  }
+  if (savedTheme === "light") document.body.classList.add("light-mode");
 
   gsap.from("#heroTitle", {
     opacity: 0,
@@ -48,7 +46,8 @@ document.getElementById("editForm").addEventListener("submit", async function (e
   const resultBlock = document.getElementById("result");
   const editingContainer = document.getElementById("editingValues");
   const captionList = document.getElementById("captionList");
-  const musicContainer = document.getElementById("englishSongs");
+  const hindiSongsDiv = document.getElementById("hindiSongs");
+  const englishSongsDiv = document.getElementById("englishSongs");
 
   loading.style.display = "block";
   resultBlock.style.display = "none";
@@ -56,13 +55,14 @@ document.getElementById("editForm").addEventListener("submit", async function (e
   const formData = new FormData(this);
 
   try {
-    const response = await fetch("/analyze", { method: "POST", body: formData });
+    const response = await fetch("/analyze", {
+      method: "POST",
+      body: formData
+    });
     const result = await response.json();
 
     // 🧠 Mood Info
-    const moodBox = document.getElementById("moodInfo");
-    moodBox.innerText = result.mood_info || "No analysis available.";
-
+    document.getElementById("moodInfo").innerText = result.mood_info || "No analysis available.";
     loading.style.display = "none";
 
     // ✅ Editing Steps
@@ -78,8 +78,6 @@ document.getElementById("editForm").addEventListener("submit", async function (e
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i].trim();
-
-      // Updated regex: matches "Step 1:", "step1:", "1:" or "Step-1"
       if (/^\**\s*(step\s*\d+|\d+:)/i.test(line)) {
         foundSteps = true;
         const stepText = line.replace(/\*\*/g, "").trim();
@@ -112,7 +110,6 @@ document.getElementById("editForm").addEventListener("submit", async function (e
       }
     }
 
-    // If no steps detected, show fallback message
     if (!foundSteps) {
       const fallback = document.createElement("div");
       fallback.className = "edit-step-box";
@@ -131,25 +128,63 @@ document.getElementById("editForm").addEventListener("submit", async function (e
         const id = `caption-${index}`;
         card.innerHTML = `
           <span id="${id}">${cap}</span>
-          <button class="copy-btn" onclick="copyToClipboard('${id}')">Copy</button>`;
+          <button class="copy-btn" onclick="copyToClipboard('${id}')">Copy</button>
+        `;
         captionList.appendChild(card);
       });
     }
 
-    // ✅ Combined Songs
-    musicContainer.innerHTML = "";
-    const music = result.songs || "";
+    // ✅ Music Suggestions
+    hindiSongsDiv.innerHTML = "";
+    englishSongsDiv.innerHTML = "";
 
-    const musicCard = document.createElement("div");
-    musicCard.className = "music-card";
-    musicCard.innerHTML = `
-      <h4>🎵 Suggested Songs (Hindi + English)</h4>
-      <p>${music.replace(/\n/g, "<br>")}</p>
-    `;
+    if (Array.isArray(result.songs) && result.songs.length > 0) {
+      result.songs.forEach(song => {
+        const card = document.createElement("div");
+        card.className = "song-card";
+        const img = document.createElement("img");
+        img.src = song.cover || "/static/music-default.jpg";
+        img.alt = "cover";
 
-    musicContainer.appendChild(musicCard);
+        // Fallback image
+        img.onerror = () => {
+          img.src = "/static/music-default.jpg";
+        };
 
-    // ✅ Show Results
+        const title = document.createElement("div");
+        title.className = "song-title";
+        title.innerText = song.title || "Untitled";
+
+        const artist = document.createElement("div");
+        artist.className = "song-artist";
+        artist.innerText = song.artist || "Unknown Artist";
+
+        card.appendChild(img);
+        card.appendChild(title);
+        card.appendChild(artist);
+
+        if (song.preview) {
+          const audio = document.createElement("audio");
+          audio.controls = true;
+          audio.src = song.preview;
+          card.appendChild(audio);
+        }
+
+        if (song.language === "hindi") {
+          hindiSongsDiv.appendChild(card);
+        } else {
+          englishSongsDiv.appendChild(card);
+        }
+      });
+    } else {
+      const fallback = document.createElement("div");
+      fallback.className = "music-card";
+      fallback.innerText = "🎵 No songs available.";
+      hindiSongsDiv.appendChild(fallback);
+      englishSongsDiv.appendChild(fallback.cloneNode(true));
+    }
+
+    // ✅ Reveal Result
     resultBlock.style.display = "block";
     resultBlock.scrollIntoView({ behavior: "smooth" });
 
@@ -160,26 +195,26 @@ document.getElementById("editForm").addEventListener("submit", async function (e
   }
 });
 
-// 📋 Copy function
+// 📋 Copy caption
 function copyToClipboard(id) {
   const text = document.getElementById(id).innerText;
-  navigator.clipboard.writeText(text).then(() => {
-    alert("Copied!");
-  });
+  navigator.clipboard.writeText(text).then(() => alert("Copied!"));
 }
 
+// 📝 Style description live update
 document.getElementById("styleSelector").addEventListener("change", function () {
-  const selectedOption = this.options[this.selectedIndex];
-  const desc = selectedOption.getAttribute("data-desc") || "";
-  document.getElementById("styleDescription").textContent = desc;
+  const selected = this.options[this.selectedIndex];
+  document.getElementById("styleDescription").textContent = selected.getAttribute("data-desc") || "";
 });
 
+// 💬 Glamo Chat
 async function sendChat() {
   const input = document.getElementById("chatInput");
   const question = input.value.trim();
   if (!question) return;
 
   const chatBox = document.getElementById("chatBox");
+
   const userMsg = document.createElement("div");
   userMsg.innerHTML = `<strong>You:</strong> ${question}`;
   chatBox.appendChild(userMsg);
@@ -196,6 +231,7 @@ async function sendChat() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ question })
     });
+
     const data = await res.json();
     typing.remove();
 
@@ -203,23 +239,25 @@ async function sendChat() {
     botMsg.innerHTML = `<strong>Glamo:</strong> ${data.answer}`;
     chatBox.appendChild(botMsg);
     chatBox.scrollTop = chatBox.scrollHeight;
-
   } catch (err) {
     typing.remove();
     alert("Chat failed. Try again.");
   }
 }
 
+// 🧠 Quick Chat
 function askQuick(question) {
   document.getElementById("chatInput").value = question;
   sendChat();
 }
 
+// 💬 Toggle Chat Widget
 function toggleChatWidget() {
   const box = document.getElementById("chatContainer");
   box.style.display = box.style.display === "none" ? "block" : "none";
 }
 
+// 🔮 AI Style/App Suggestion
 async function getStyleApp() {
   const photoInput = document.getElementById("photo");
   const file = photoInput.files[0];
