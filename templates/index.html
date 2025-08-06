@@ -5,189 +5,436 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Glamo - AI Photo Editing Assistant</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+
+  <!-- ✅ Stylesheets -->
+  <link rel="stylesheet" href="/static/style.css">
   <link rel="icon" href="/static/favicon.png" type="image/png">
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+
+  <!-- ✅ Animation Libraries -->
   <script src="https://cdn.lordicon.com/lordicon.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/vanilla-tilt@1.7.2/dist/vanilla-tilt.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css" />
+
+  <style>
+    /* ==============================
+       ROOT VARIABLES 
+    ============================== */
+    :root {
+      --highlight: #6C63FF;
+      --light-highlight: #9089FF;
+      --dark-bg: #121212;
+      --dark-card: rgba(255, 255, 255, 0.07);
+      --text-light: #fff9c0;
+    }
+
+    /* ==============================
+       BASE STYLES
+    ============================== */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body, html {
+      height: 100%;
+      background: linear-gradient(135deg, var(--dark-bg), #1e1e1e);
+      color: #ffffff;
+      overflow-x: hidden;
+      font-family: 'Poppins', sans-serif;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: auto;
+      padding: 25px 15px;
+      text-align: center;
+    }
+
+    h1, h2, h3 {
+      color: var(--highlight);
+      margin-bottom: 15px;
+    }
+
+    /* ==============================
+       LENS ANIMATION STYLES
+    ============================== */
+    #loader {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 300px;
+      height: 300px;
+      border-radius: 50%;
+      background: radial-gradient(ellipse at center, #222 40%, #000 100%);
+      box-shadow: inset 0 0 30px #111, 0 0 20px rgba(0, 0, 0, 0.9);
+    }
+
+    .ring {
+      position: absolute;
+      border: 2.5px solid #222;
+      border-radius: 50%;
+      box-shadow: 0 0 8px 2px #111 inset, 0 0 15px 2px #0ff inset;
+      animation-timing-function: linear;
+      animation-iteration-count: infinite;
+    }
+
+    .ring1 {
+      top: 20px;
+      left: 20px;
+      right: 20px;
+      bottom: 20px;
+      border-color: #1a1a1a;
+      box-shadow: 0 0 10px 2px #0ff inset, 0 0 6px #0ff;
+      animation-name: spin;
+      animation-duration: 10s;
+    }
+
+    .ring2 {
+      top: 50px;
+      left: 50px;
+      right: 50px;
+      bottom: 50px;
+      border-color: #003344;
+      box-shadow: 0 0 8px 2px #0ff inset, 0 0 20px #00ffff;
+      animation-name: spin-reverse;
+      animation-duration: 14s;
+    }
+
+    .ring3 {
+      top: 80px;
+      left: 80px;
+      right: 80px;
+      bottom: 80px;
+      border-color: #004455;
+      box-shadow: 0 0 5px 1.5px #0ff inset, 0 0 15px #00cce6;
+      animation-name: spin;
+      animation-duration: 18s;
+    }
+
+    .lens-center {
+      position: absolute;
+      top: 110px;
+      left: 110px;
+      width: 80px;
+      height: 80px;
+      background: radial-gradient(circle at center, #004d66 20%, #001a22 90%);
+      border: 2px solid #00cccc;
+      border-radius: 50%;
+      box-shadow: inset 0 0 15px #33ffff, 0 0 25px #00ccff;
+    }
+
+    .gleam {
+      position: absolute;
+      border-radius: 50%;
+      opacity: 0.8;
+      filter: drop-shadow(0 0 5px #0ff);
+      animation-timing-function: linear;
+      animation-iteration-count: infinite;
+    }
+
+    .gleam1 {
+      width: 25px;
+      height: 8px;
+      background: linear-gradient(90deg, rgba(0, 255, 255, 0.7) 0, rgba(0, 255, 255, 0.1) 100%);
+      top: 30px;
+      left: 50%;
+      margin-left: -12.5px;
+      box-shadow: 0 0 15px 5px #0ff;
+      animation-name: gleamSpin;
+      animation-duration: 6s;
+    }
+
+    .gleam2 {
+      width: 35px;
+      height: 10px;
+      background: linear-gradient(45deg, rgba(0, 255, 255, 0.6), rgba(0, 255, 255, 0));
+      top: 110px;
+      left: 50%;
+      margin-left: -17.5px;
+      box-shadow: 0 0 18px 7px #00e6ff;
+      animation-name: gleamSpinReverse;
+      animation-duration: 9s;
+    }
+
+    .gleam3 {
+      width: 20px;
+      height: 6px;
+      background: linear-gradient(120deg, rgba(0, 255, 255, 0.5) 0, rgba(0, 255, 255, 0) 100%);
+      top: 200px;
+      left: 50%;
+      margin-left: -10px;
+      box-shadow: 0 0 12px 4px #00b8e6;
+      animation-name: gleamSpin;
+      animation-duration: 7.5s;
+    }
+
+    /* Animations */
+    @keyframes spin {
+      from {transform: rotate(0deg);}
+      to {transform: rotate(360deg);}
+    }
+    @keyframes spin-reverse {
+      from {transform: rotate(360deg);}
+      to {transform: rotate(0deg);}
+    }
+
+    @keyframes gleamSpin {
+      from {transform: rotate(0deg) translateX(130px) rotate(0deg);}
+      to {transform: rotate(360deg) translateX(130px) rotate(-360deg);}
+    }
+    @keyframes gleamSpinReverse {
+      from {transform: rotate(360deg) translateX(130px) rotate(-360deg);}
+      to {transform: rotate(0deg) translateX(130px) rotate(0deg);}
+    }
+
+    /* Loading text */
+    #loadingText {
+      position: absolute;
+      bottom: -70px;
+      width: 100%;
+      text-align: center;
+      font-size: 1.2rem;
+      color: #00ffff;
+      letter-spacing: 2px;
+      font-weight: 600;
+      text-shadow: 0 0 8px #00ffffaa;
+    }
+
+    /* ==============================
+       FORM STYLES
+    ============================== */
+    form {
+      background: rgba(30, 30, 30, 0.8);
+      border: 1px solid var(--highlight);
+      backdrop-filter: blur(16px);
+      padding: 2rem;
+      border-radius: 24px;
+      margin: 2rem auto;
+      transition: all 0.3s ease;
+    }
+
+    form label {
+      display: block;
+      font-weight: 600;
+      font-size: 14px;
+      margin: 14px 0 6px;
+      text-align: left;
+      color: var(--text-light);
+    }
+
+    input, select, button {
+      display: block;
+      width: 100%;
+      margin: 10px 0;
+      padding: 12px;
+      border-radius: 10px;
+      border: 2px solid #444;
+      font-size: 15px;
+      transition: all 0.3s ease;
+      background: #2b2b2b;
+      color: #fff;
+    }
+
+    button {
+      background: var(--highlight);
+      border: none;
+      padding: 1rem 2rem;
+      border-radius: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+    }
+
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 20px rgba(108, 99, 255, 0.3);
+    }
+
+    /* ==============================
+       RESPONSIVE DESIGN
+    ============================== */
+    @media (max-width: 768px) {
+      .container {
+        padding: 1rem;
+      }
+
+      form {
+        padding: 1.5rem;
+        margin: 1rem;
+      }
+
+      h1 {
+        font-size: 1.8rem;
+      }
+    }
+  </style>
 </head>
 
 <body>
-
-  <!-- 🎈 Bubbles Background -->
-  <div class="bubbles"></div>
-
-  <!-- 🌗 Theme Switcher -->
-  <div class="theme-switcher">
-    <button onclick="toggleTheme()">🌙/☀️</button>
+  <!-- 🎨 Lens Intro Animation Screen -->
+  <div id="loader" role="img" aria-label="Camera lens loading animation">
+    <div class="ring ring1"></div>
+    <div class="ring ring2"></div>
+    <div class="ring ring3"></div>
+    <div class="lens-center"></div>
+    <div class="gleam gleam1"></div>
+    <div class="gleam gleam2"></div>
+    <div class="gleam gleam3"></div>
+    <div id="loadingText">LOADING</div>
   </div>
 
-  <div class="container">
-    <h1 id="heroTitle">📸 Glamo - AI Photo Editing Assistant</h1>
-
-    <!-- ✨ Floating Icon -->
-    <lord-icon src="https://cdn.lordicon.com/wmlleaaf.json" trigger="loop" delay="1500"
-      colors="primary:#ffffff,secondary:#ff4f8b" style="width:60px;height:60px;margin-top: 10px;">
-    </lord-icon>
-
-    <!-- 📤 Upload Form -->
-    <form id="editForm" enctype="multipart/form-data">
-      <label>Select a photo:</label>
-      <input type="file" id="photo" name="photo" accept="image/*" required class="form-item" />
-      <img id="photoPreview" src="#" alt="Preview" style="display:none; max-width: 100%; margin: 10px 0;" />
-
-      <label>Select your editing app:</label>
-      <select name="app" required class="form-item">
-        <option value="">--Choose App--</option>
-        <option value="iphone">iPhone Photos App</option>
-        <option value="vsco">VSCO</option>
-        <option value="lightroom">Lightroom</option>
-        <option value="snapseed">Snapseed</option>
-        <option value="picsart">Picsart</option>
-      </select>
-
-      <label>Select style:</label>
-      <select name="style" id="styleSelector" required class="form-item">
-        <option value="">--Choose Style--</option>
-        <option value="Vibrant & Vivid" data-desc="Punchy colors and bold contrast.">Vibrant & Vivid</option>
-        <option value="Bright & Airy" data-desc="Soft whites, natural light, clean tones.">Bright & Airy</option>
-        <option value="Cinematic / Teal & Orange" data-desc="Film-like tones with teal and warm hues.">Cinematic / Teal
-          & Orange</option>
-        <option value="Moody & Dark" data-desc="Muted shadows, high contrast, deep tones.">Moody & Dark</option>
-        <option value="Soft Pastel" data-desc="Delicate, low saturation pastel colors.">Soft Pastel</option>
-        <option value="Black & White / Monochrome" data-desc="No color, high detail, dramatic.">Black & White /
-          Monochrome</option>
-        <option value="Retro / Vintage / Film Style" data-desc="Old film aesthetics, grain, warm hues.">Retro / Vintage
-          / Film Style</option>
-        <option value="Golden Hour Glow" data-desc="Warm highlights and soft orange tones.">Golden Hour Glow</option>
-        <option value="AI Enhance + Background Blur" data-desc="Boosted clarity with blurred background.">AI Enhance +
-          Background Blur</option>
-      </select>
-      <!-- 🔮 Ask AI for Style & App -->
-      <button type="button" onclick="getStyleApp()"
-        style="margin-top:10px; background:#ffcc00; color:#000; padding:8px 12px; border:none; border-radius:8px; font-weight:bold;">🔮
-        Suggest Best Style & App</button>
-
-      <div id="styleAppResult"
-        style="display:none; background:#2b2b2b; padding:10px; margin-top:10px; border-radius:8px; color:#fff9c0;">
+  <!-- Main content, initially hidden by JavaScript after intro animation -->
+  <div id="glamo-content" style="display: none;">
+    <div class="container">
+      <!-- 🌟 Hero Section -->
+      <div class="hero animate__animated animate__fadeIn" style="margin-bottom: 10px;">
+        <h1 id="heroTitle">📸 Glamo - AI Photo Editing Assistant</h1>
+        <lord-icon src="https://cdn.lordicon.com/wmlleaaf.json" trigger="loop" delay="1500"
+          colors="primary:#ffffff,secondary:#ff4f8b" style="width:60px;height:60px;margin-top: 10px;">
+        </lord-icon>
       </div>
 
+      <!-- 📤 Upload Form -->
+      <form id="editForm" enctype="multipart/form-data" class="animate__animated animate__fadeInUp">
+        <label>Select a photo:</label>
+        <input type="file" id="photo" name="photo" accept="image/*" required class="form-item" />
+        <img id="photoPreview" src="#" alt="Preview" style="display:none;" />
 
-      <!-- 🧾 Live Description Box -->
-      <div id="styleDescription" class="form-item" style="font-style: italic; font-size: 14px; color: #ccc;"></div>
+        <label>Select your editing app:</label>
+        <select name="app" id="app" required class="form-item">
+          <option value="">--Choose App--</option>
+          <option value="iphone">iPhone Photos App</option>
+          <option value="vsco">VSCO</option>
+          <option value="lightroom">Lightroom</option>
+          <option value="snapseed">Snapseed</option>
+          <option value="picsart">Picsart</option>
+        </select>
 
+        <label>Select style:</label>
+        <select name="style" id="styleSelector" required class="form-item">
+          <option value="">--Choose Style--</option>
+          <option value="Vibrant & Vivid" data-desc="Punchy colors and bold contrast.">Vibrant & Vivid</option>
+          <option value="Bright & Airy" data-desc="Soft whites, natural light, clean tones.">Bright & Airy</option>
+          <option value="Cinematic / Teal & Orange" data-desc="Film-like tones with teal and warm hues.">Cinematic / Teal & Orange</option>
+          <option value="Moody & Dark" data-desc="Muted shadows, high contrast, deep tones.">Moody & Dark</option>
+          <option value="Soft Pastel" data-desc="Delicate, low saturation pastel colors.">Soft Pastel</option>
+          <option value="Black & White / Monochrome" data-desc="No color, high detail, dramatic.">Black & White / Monochrome</option>
+          <option value="Retro / Vintage / Film Style" data-desc="Old film aesthetics, grain, warm hues.">Retro / Vintage / Film Style</option>
+          <option value="Golden Hour Glow" data-desc="Warm highlights and soft orange tones.">Golden Hour Glow</option>
+          <option value="AI Enhance + Background Blur" data-desc="Boosted clarity with blurred background.">AI Enhance + Background Blur</option>
+        </select>
 
-      <button type="submit" class="form-item">✨ Get Editing Suggestions</button>
-    </form>
+        <!-- 🔮 Suggest Button -->
+        <button type="button" onclick="getStyleApp()" class="suggest-btn">🔮 Suggest Best Style & App</button>
+        <div id="styleAppResult" style="display:none;"></div>
 
-    <!-- ⏳ Loading -->
-    <div class="loading" id="loading"><span></span><span></span><span></span></div>
+        <!-- 🧾 Live Style Description -->
+        <div id="styleDescription" class="form-item"></div>
 
-    <!-- ✅ Updated inside <div id="result"> -->
-    <div id="result" style="display: none;">
-      <h2>🎯 Your Personalized Editing Guide</h2>
+        <!-- ✨ Submit Button -->
+        <button type="submit" class="form-item">✨ Get Editing Suggestions</button>
+      </form>
 
-      <!-- 🧠 Mood & Scene Detector -->
-      <div>
-        <h3>🧠 Mood & Scene</h3>
-        <pre class="edit-category" id="moodInfo" style="white-space: pre-wrap;"></pre>
+      <!-- ⏳ Loading Spinner -->
+      <div class="loading" id="loading"><span></span><span></span><span></span></div>
+
+      <!-- ✅ AI Output -->
+      <div id="result" style="display: none;" class="animate__animated animate__fadeIn">
+        <h2>🎯 Your Personalized Editing Guide</h2>
+
+        <div>
+          <h3>🧠 Mood & Scene</h3>
+          <div class="edit-category tilt-item" id="moodInfo" style="white-space: pre-wrap;"></div>
+        </div>
+
+        <div>
+          <h3>🎛️ Editing Steps</h3>
+          <div class="editing-values-container" id="editingValues"></div>
+        </div>
+
+        <div>
+          <h3>📝 Captions for Instagram</h3>
+          <div class="caption-list-container" id="captionList"></div>
+        </div>
+
+        <div class="music-wrapper">
+          <h3>🎵 Music Suggestions</h3>
+          <h4 class="song-section-title">🎶 Music Suggestions</h4>
+
+          <!-- 🎼 Song Card Container (2x2 grid) -->
+          <div id="allSongs" class="song-card-container">
+            <!-- Song cards will be dynamically added here by JavaScript -->
+            <div class="song-card">
+              <img src="/static/music-default.jpg" alt="Default Song Cover">
+              <div class="song-title">Loading...</div>
+              <div class="song-artist"></div>
+            </div>
+            <div class="song-card">
+              <img src="/static/music-default.jpg" alt="Default Song Cover">
+              <div class="song-title">Loading...</div>
+              <div class="song-artist"></div>
+            </div>
+          </div>
+        </div>
+
+        <footer>
+          Made with ❤️ by Shubham Joshi |
+          <a href="https://github.com" target="_blank">GitHub</a> |
+          <a href="https://instagram.com" target="_blank">Instagram</a>
+        </footer>
       </div>
-
-
-      <!-- 🎚️ Editing Steps -->
-      <div>
-        <h3>🎛️ Editing Steps</h3>
-        <div class="editing-values-container" id="editingValues"></div>
-      </div>
-
-      <!-- 📝 Captions -->
-      <div>
-        <h3>📝 Captions for Instagram</h3>
-        <div class="caption-list-container" id="captionList"></div>
-      </div>
-
-      <!-- 🎵 Music Suggestions -->
-      <div class="music-wrapper">
-        <h3>🎵 Music Suggestions</h3>
-
-        <!-- <h4 class="song-section-title">🎶 Hindi Songs</h4>
-        <div id="hindiSongs" class="song-list"></div> -->
-
-        <h4 class="song-section-title">🎶  Songs</h4>
-        <div id="englishSongs" class="song-list"></div>
-      </div>
-
-
-
-
-      <!-- 👣 Footer -->
-      <footer>
-        Made with ❤️ by Shubham Joshi |
-        <a href="https://github.com" target="_blank">GitHub</a> |
-        <a href="https://instagram.com" target="_blank">Instagram</a>
-      </footer>
     </div>
+  </div>
 
-    <!-- 🎨 Bubble Background Script -->
-    <script>
+  <!-- 🎨 Background Bubbles Script (for the intro screen) -->
+  <script>
+    // This script dynamically creates the bubble elements for the intro screen.
+    const bubblesContainer = document.querySelector('.bubbles');
+    if (bubblesContainer) {
       for (let i = 0; i < 20; i++) {
         const b = document.createElement('div');
         b.className = 'bubble';
         b.style.setProperty('--i', Math.random());
-        document.querySelector('.bubbles').appendChild(b);
+        bubblesContainer.appendChild(b);
       }
-    </script>
+    }
+  </script>
 
-    <!-- 🔄 Tilt Init -->
-    <script>
-      window.addEventListener("load", () => {
+  <!-- 🔄 Tilt Effect -->
+  <script>
+    window.addEventListener("load", () => {
+      if (typeof VanillaTilt !== "undefined") {
         VanillaTilt.init(document.querySelectorAll(".edit-category, .caption-card"), {
           max: 10,
           speed: 400,
           glare: true,
           "max-glare": 0.2,
         });
-      });
-    </script>
+      }
+    });
+  </script>
 
-    <!-- 📜 JS Logic -->
-    <script src="{{ url_for('static', filename='script.js') }}"></script>
-    <!-- 🤖 Glamo Chat Assistant -->
-    <!-- <div id="chatBot" style="margin-top: 40px;"> -->
+  <!-- 📜 Main JS (contains the lens animation logic and other functionalities) -->
+  <script src="/static/script.js" defer></script>
 
-    <!-- 🤖 Floating Chat Assistant -->
-    <!-- 💬 Floating Chat Icon + Box -->
-    <!-- <div id="chatWidget"> -->
-    <!-- Icon Button -->
-    <div id="chatToggleBtn" onclick="toggleChatWidget()">💬</div>
-
-    <!-- Hidden Chat Box -->
-    <div id="chatContainer" style="display: none;">
-      <div id="chatBot">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-          <h3 style="margin: 0;">Ask Glamo</h3>
-          <button onclick="toggleChatWidget()"
-            style="background:none;border:none;color:#fff;font-size:18px;">✖️</button>
-        </div>
-
-        <div id="chatBox"></div>
-        <input type="text" id="chatInput" placeholder="Ask something..." />
-        <button onclick="sendChat()">Send</button>
-
-        <div id="quickQuestions">
-          <p style="color: #fff9c0; font-weight: bold;">Quick Questions:</p>
-          <button onclick="askQuick('How do I use Glamo?')">How do I use Glamo?</button>
-          <button onclick="askQuick('Best style for Instagram reels?')">Best Style?</button>
-          <button onclick="askQuick('Snapseed vs VSCO – which to use?')">Snapseed vs VSCO</button>
-          <button onclick="askQuick('Can I get captions and songs here?')">Captions & Songs</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-
-
+  <script>
+    // Simulate loading and hide loader after some seconds
+    window.addEventListener('load', () => {
+      setTimeout(() => {
+        const loader = document.getElementById('loader');
+        loader.style.transition = 'opacity 0.8s ease';
+        loader.style.opacity = '0';
+        setTimeout(() => {
+          loader.style.display = 'none';
+          document.getElementById('glamo-content').style.display = 'block'; // Show main content
+        }, 800);
+      }, 3500); // Adjust the duration as needed
+    });
+  </script>
 </body>
 
 </html>
