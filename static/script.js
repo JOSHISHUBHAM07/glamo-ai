@@ -1,966 +1,330 @@
-// 🖼️ Compress image to webp (512px max)
-async function compressImage(file) {
-  if (!file) return file;
-  return new Promise((resolve) => {
-    const img = new Image();
-    const reader = new FileReader();
+document.addEventListener('DOMContentLoaded', () => {
 
-    reader.onload = (e) => (img.src = e.target.result);
-    reader.readAsDataURL(file);
+    // =================================================================
+    // STATE & DOM ELEMENTS
+    // =================================================================
 
-    img.onload = () => {
-      const max = 512;
-      const scale = Math.min(max / img.width, max / img.height, 1);
-      const canvas = document.createElement("canvas");
-      canvas.width = img.width * scale;
-      canvas.height = img.height * scale;
-      const ctx = canvas.getContext("2d");
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    // NEW: A variable to hold the state of the uploaded file. This is the core of the fix.
+    let currentFile = null;
 
-      canvas.toBlob(
-        (blob) => resolve(new File([blob], "compressed.webp", { type: "image/webp" })),
-        "image/webp",
-        0.8
-      );
+    const dom = {
+        loader: document.getElementById('loader'),
+        glamoContent: document.getElementById('glamo-content'),
+        editForm: document.getElementById('editForm'),
+        photoInput: document.getElementById('photo'),
+        fileInfo: document.getElementById('fileInfo'),
+        photoPreview: document.getElementById('photoPreview'),
+        fileName: document.getElementById('fileName'),
+        styleSelector: document.getElementById('styleSelector'),
+        styleDescription: document.getElementById('styleDescription'),
+        suggestStyleBtn: document.getElementById('suggestStyleBtn'),
+        styleAppResult: document.getElementById('styleAppResult'),
+        loadingSpinner: document.getElementById('loading'),
+        resultBlock: document.getElementById('result'),
+        errorMessageDiv: document.getElementById('errorMessage'),
+        moodInfoDiv: document.getElementById('moodInfo'),
+        editingValuesDiv: document.getElementById('editingValues'),
+        captionListDiv: document.getElementById('captionList'),
+        songListDiv: document.getElementById('songList')
     };
 
-    img.onerror = () => resolve(file); // Fallback if image is invalid
-  });
-}
-
-// 🎨 Lens Intro Animation with Sound
-document.addEventListener("DOMContentLoaded", () => {
-  const cameraLens = document.getElementById("camera-lens");
-  const introScreen = document.getElementById("intro-screen");
-  const glamoContent = document.getElementById("glamo-content");
-  const shatterSound = document.getElementById("shatter-sound");
-
-  // Unlock audio on first click
-  window.addEventListener(
-    "click",
-    () => {
-      if (shatterSound) {
-        shatterSound.muted = true;
-        shatterSound.play().then(() => {
-          shatterSound.pause();
-          shatterSound.muted = false;
-        }).catch(() => {});
-      }
-    },
-    { once: true }
-  );
-
-  function shatterLens() {
-    if (!cameraLens || !introScreen || !glamoContent) return;
-
-    const lensRect = cameraLens.getBoundingClientRect();
-    cameraLens.style.opacity = "0";
-
-    if (shatterSound) {
-      shatterSound.currentTime = 0;
-      shatterSound.play().catch(() => {});
+    // =================================================================
+    // API CALLS
+    // =================================================================
+    async function analyzeImage(formData) {
+        const response = await fetch('/analyze', { method: 'POST', body: formData });
+        const result = await response.json();
+        if (!response.ok) {
+            throw new Error(result.detail || 'An unknown server error occurred.');
+        }
+        return result;
     }
 
-    const shards = 60;
-    for (let i = 0; i < shards; i++) {
-      const shard = document.createElement("div");
-      shard.classList.add("shard");
-      const size = Math.random() * 25 + 15;
-      shard.style.width = `${size}px`;
-      shard.style.height = `${size}px`;
-      shard.style.left = `${lensRect.left + lensRect.width / 2 - size / 2}px`;
-      shard.style.top = `${lensRect.top + lensRect.height / 2 - size / 2}px`;
-      document.body.appendChild(shard);
-
-      const angle = Math.random() * Math.PI * 2;
-      const distance = 300 + Math.random() * 300;
-      const dx = Math.cos(angle) * distance;
-      const dy = Math.sin(angle) * distance;
-
-      gsap.to(shard, {
-        x: dx,
-        y: dy,
-        rotation: Math.random() * 1080,
-        scale: Math.random() * 0.5 + 0.3,
-        opacity: 0,
-        duration: 2.5,
-        ease: "power4.out",
-        onComplete: () => shard.remove(),
-      });
+    async function suggestStyle(formData) {
+        const response = await fetch('/suggest_style_app', { method: 'POST', body: formData });
+        const result = await response.json();
+        if (!response.ok) {
+            throw new Error(result.detail || 'Failed to get a style suggestion.');
+        }
+        return result;
     }
 
-    setTimeout(() => {
-      introScreen.style.display = "none";
-      glamoContent.style.display = "block";
-    }, 2800);
-  }
+    // =================================================================
+    // UI RENDERING & UPDATES
+    // =================================================================
+    function setLoadingState(isLoading) {
+        dom.loadingSpinner.style.display = isLoading ? 'flex' : 'none';
+        if (isLoading) {
+            dom.resultBlock.style.display = 'none';
+            dom.errorMessageDiv.style.display = 'none';
+        }
+    }
 
-  if (cameraLens && introScreen && glamoContent) {
-    setTimeout(shatterLens, 1200);
-  }
+    function renderError(message) {
+        dom.errorMessageDiv.textContent = `❌ ${message}`;
+        dom.errorMessageDiv.style.display = 'block';
+        dom.errorMessageDiv.scrollIntoView({ behavior: 'smooth' });
+    }
 
-  // Fade-in animations
-  if (typeof gsap !== "undefined") {
-    gsap.from("#heroTitle", { opacity: 0, y: -30, duration: 1 });
-    gsap.from(".form-item", { opacity: 0, y: 30, duration: 0.8, stagger: 0.1, delay: 0.3 });
-  }
-});
+    function renderResults(result) {
+        // Clear previous results
+        dom.moodInfoDiv.innerHTML = '';
+        dom.editingValuesDiv.innerHTML = '';
+        dom.captionListDiv.innerHTML = '';
+        dom.songListDiv.innerHTML = '';
 
-// 📸 Preview image
-document.getElementById("photo").addEventListener("change", function () {
-  const preview = document.getElementById("photoPreview");
-  if (this.files[0]) {
-    preview.src = URL.createObjectURL(this.files[0]);
-    preview.style.display = "block";
-  }
-});
+        // Render sections
+        renderEditingSteps(result.editing_values);
+        renderCaptions(result.captions);
+        renderSongs(result.songs);
+        renderAnalysis(result.mood_info);
 
-// 🧠 Submit Form
-document.getElementById("editForm").addEventListener("submit", async function (e) {
-  e.preventDefault();
+        // Show results and manage focus for accessibility
+        dom.resultBlock.style.display = 'block';
+        dom.resultBlock.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        dom.resultBlock.focus();
 
-  const photoInput = document.getElementById("photo");
-  const loading = document.getElementById("loading");
-  const resultBlock = document.getElementById("result");
-  const editingContainer = document.getElementById("editingValues");
-  const captionList = document.getElementById("captionList");
-  const allSongsDiv = document.getElementById("allSongs");
+        initializeTilt();
+    }
 
-  if (!photoInput.files[0]) {
-    alert("Please upload a photo.");
-    return;
-  }
-
-  loading.classList.add("show");
-  loading.style.display = "block";
-  resultBlock.style.display = "none";
-
-  try {
-    const formData = new FormData();
-    const compressed = await compressImage(photoInput.files[0]);
-    formData.append("photo", compressed);
-    formData.append("selected_app", document.querySelector("select[name='app']").value);
-    formData.append("style", document.getElementById("styleSelector").value);
-
-    const res = await fetch("/analyze", { method: "POST", body: formData });
-    if (!res.ok) throw new Error("Failed to get response from server");
-
-    const result = await res.json();
-    document.getElementById("moodInfo").innerText = result.mood_info || "No mood data available.";
-    editingContainer.innerHTML = "";
-    captionList.innerHTML = "";
-    allSongsDiv.innerHTML = "";
-
-    // --- Editing Steps ---
-    const rawText = result.editing_values || "";
-    const lines = rawText.split("\n").filter(line => line.trim() !== "");
-    const section = document.createElement("div");
-    section.className = "edit-category";
-    section.innerHTML = `<h3>📋 Recommended Edits</h3>`;
-
-    let found = false;
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i].trim();
-      if (/(\bstep\s*\d+|\d+\:)/i.test(line)) {
-        found = true;
-        const step = line.replace(/\*\*/g, "").trim();
-        let reason = "";
-        for (let j = i + 1; j < i + 3 && j < lines.length; j++) {
-          const next = lines[j].trim();
-          if (next.toLowerCase().startsWith("reason")) {
-            reason = next.replace(/\*\*/g, "").trim();
-            break;
-          }
+    function renderAnalysis(moodInfo) {
+        const template = document.getElementById('analysis-card-template');
+        if (!moodInfo || !template) {
+            dom.moodInfoDiv.innerHTML = '<p>No image analysis available.</p>';
+            return;
         }
 
-        const group = document.createElement("div");
-        group.className = "edit-step-group";
-        const stepBox = document.createElement("div");
-        stepBox.className = "edit-step-box";
-        stepBox.innerText = step;
-        group.appendChild(stepBox);
+        const analysisPoints = moodInfo.split('\n')
+            .map(line => line.replace(/-\s*/, '').trim())
+            .filter(line => line.includes(':'));
 
-        if (reason) {
-          const reasonBox = document.createElement("div");
-          reasonBox.className = "edit-reason-box";
-          reasonBox.innerText = reason;
-          group.appendChild(reasonBox);
+        if (analysisPoints.length === 0) {
+            dom.moodInfoDiv.innerHTML = '<p>No analysis points found.</p>';
+            return;
         }
 
-        section.appendChild(group);
-      }
+        analysisPoints.forEach(point => {
+            const card = template.content.cloneNode(true);
+            const textElement = card.querySelector('.analysis-text');
+            const [key, ...valueParts] = point.split(':');
+            const value = valueParts.join(':').trim();
+
+            textElement.innerHTML = `<strong>${key.replace(/\*\*/g, '')}:</strong> <i>${value}</i>`;
+            dom.moodInfoDiv.appendChild(card);
+        });
     }
 
-    if (!found) {
-      const fallback = document.createElement("div");
-      fallback.className = "edit-step-box";
-      fallback.innerText = "⚠️ No valid editing steps detected.";
-      section.appendChild(fallback);
-    }
-    editingContainer.appendChild(section);
-
-    // --- Captions ---
-    if (Array.isArray(result.captions)) {
-      result.captions.forEach((cap, i) => {
-        const card = document.createElement("div");
-        card.className = "caption-card";
-        const id = `caption-${i}`;
-        card.innerHTML = `<span id="${id}">${cap}</span>
-                          <button class="copy-btn" onclick="copyToClipboard('${id}')">Copy</button>`;
-        captionList.appendChild(card);
-      });
-    }
-
-    // --- Music ---
-    if (Array.isArray(result.songs)) {
-      result.songs.forEach((song) => {
-        const card = document.createElement("div");
-        card.className = "song-card";
-        const img = document.createElement("img");
-        img.src = song.image || "/static/music-default.jpg";
-        img.onerror = () => { img.src = "/static/music-default.jpg" };
-        const title = document.createElement("div");
-        title.className = "song-title";
-        title.innerText = song.title || "Untitled";
-        const artist = document.createElement("div");
-        artist.className = "song-artist";
-        artist.innerText = song.artist || "Unknown";
-
-        card.append(img, title, artist);
-        if (song.preview) {
-          const audio = document.createElement("audio");
-          audio.controls = true;
-          audio.src = song.preview;
-          card.appendChild(audio);
+    function renderEditingSteps(editingValues) {
+        const template = document.getElementById('editing-card-template');
+        if (!editingValues || !template) {
+            dom.editingValuesDiv.innerHTML = '<p>No editing steps provided.</p>';
+            return;
         }
-        allSongsDiv.appendChild(card);
-      });
+
+        const lines = editingValues.split('\n').filter(line => line.trim());
+        if (lines.length === 0) {
+            dom.editingValuesDiv.innerHTML = '<p>No editing steps detected.</p>';
+            return;
+        }
+
+        lines.forEach(line => {
+            const card = template.content.cloneNode(true);
+            const textElement = card.querySelector('.editing-text');
+
+            const match = line.match(/\*\*(.*?)\*\*\s*(.*)/);
+
+            if (match) {
+                const step = match[1];
+                const reason = match[2];
+                textElement.innerHTML = `<strong>${step}</strong> <i>${reason}</i>`;
+            } else {
+                textElement.textContent = line;
+            }
+
+            dom.editingValuesDiv.appendChild(card);
+        });
     }
 
-    resultBlock.style.display = "block";
-    resultBlock.scrollIntoView({ behavior: "smooth" });
+    function renderCaptions(captions) {
+        const template = document.getElementById('caption-card-template');
+        if (!captions || captions.length === 0 || !template) {
+            dom.captionListDiv.innerHTML = '<p>No captions were generated.</p>';
+            return;
+        }
+        captions.forEach(caption => {
+            const card = template.content.cloneNode(true);
+            const span = card.querySelector('span');
+            span.textContent = caption;
 
-  } catch (err) {
-    console.error("❌ Error:", err);
-    alert("Something went wrong. Please try again.");
-  } finally {
-    loading.classList.remove("show");
-    loading.style.display = "none";
-  }
+            const button = card.querySelector('.copy-btn');
+            button.addEventListener('click', () => copyToClipboard(caption, button));
+
+            dom.captionListDiv.appendChild(card);
+        });
+    }
+
+    function renderSongs(songs) {
+        const template = document.getElementById('song-card-template');
+        if (!songs || songs.length === 0 || !template) {
+            dom.songListDiv.innerHTML = '<p>No music suggestions found for this image.</p>';
+            return;
+        }
+        songs.forEach(song => {
+            const card = template.content.cloneNode(true);
+            card.querySelector('img').src = song.image || '/static/music-default.jpg';
+            card.querySelector('img').alt = `Album art for ${song.title} by ${song.artist}`;
+            card.querySelector('.song-title').textContent = song.title || 'Untitled';
+            card.querySelector('.song-artist').textContent = song.artist || 'Unknown Artist';
+            const audio = card.querySelector('audio');
+            if (song.preview) {
+                audio.src = song.preview;
+            } else {
+                audio.remove();
+            }
+            dom.songListDiv.appendChild(card);
+        });
+    }
+
+    // =================================================================
+    // UTILITY FUNCTIONS
+    // =================================================================
+
+    async function compressImage(file) {
+        if (!file || !file.type.startsWith('image/')) return file;
+        return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = (e) => {
+                const img = new Image();
+                img.src = e.target.result;
+                img.onload = () => {
+                    const max = 1024;
+                    const scale = Math.min(max / img.width, max / img.height, 1);
+                    const canvas = document.createElement("canvas");
+                    canvas.width = img.width * scale;
+                    canvas.height = img.height * scale;
+                    const ctx = canvas.getContext("2d");
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    canvas.toBlob((blob) => resolve(new File([blob], "compressed.webp", { type: "image/webp" })), "image/webp", 0.85);
+                };
+                img.onerror = () => resolve(file);
+            };
+        });
+    }
+
+    function copyToClipboard(textToCopy, buttonElement) {
+        navigator.clipboard.writeText(textToCopy).then(() => {
+            const originalText = buttonElement.textContent;
+            buttonElement.textContent = 'Copied!';
+            buttonElement.disabled = true;
+            setTimeout(() => {
+                buttonElement.textContent = originalText;
+                buttonElement.disabled = false;
+            }, 1500);
+        }).catch(err => {
+            console.error('Failed to copy text: ', err);
+            renderError('Could not copy text to clipboard.');
+        });
+    }
+
+    // =================================================================
+    // EVENT HANDLERS
+    // =================================================================
+
+    async function handleFormSubmit(event) {
+        event.preventDefault();
+        // UPDATED: Validate using the state variable
+        if (!currentFile) {
+            renderError('Please upload a photo before submitting.');
+            return;
+        }
+
+        setLoadingState(true);
+        const compressedPhoto = await compressImage(currentFile);
+
+        // Build FormData manually now
+        const formData = new FormData();
+        formData.append('photo', compressedPhoto);
+        formData.append('selected_app', dom.editForm.elements.selected_app.value);
+        formData.append('style', dom.editForm.elements.style.value);
+
+        try {
+            const result = await analyzeImage(formData);
+            renderResults(result);
+        } catch (error) {
+            console.error('Fetch Error:', error);
+            renderError(error.message);
+        } finally {
+            setLoadingState(false);
+        }
+    }
+
+    async function handleSuggestStyle() {
+        // UPDATED: Validate using the state variable
+        if (!currentFile) {
+            renderError("Please upload a photo before suggesting a style.");
+            return;
+        }
+
+        dom.styleAppResult.style.display = 'block';
+        dom.styleAppResult.textContent = '⏳ Analyzing for best style...';
+
+        const compressedPhoto = await compressImage(currentFile);
+        const formData = new FormData();
+        formData.append('photo', compressedPhoto);
+
+        try {
+            const result = await suggestStyle(formData);
+            dom.styleAppResult.innerHTML = `<pre>${result.result}</pre>`;
+        } catch (error) {
+            console.error('Style Suggestion Error:', error);
+            dom.styleAppResult.textContent = `❌ ${error.message}`;
+        }
+    }
+
+    function handlePhotoPreview(file) {
+        if (file) {
+            dom.photoPreview.src = URL.createObjectURL(file);
+            dom.fileName.textContent = file.name;
+            dom.fileInfo.style.display = 'flex';
+        }
+    }
+
+    function handleStyleDescriptionChange() {
+        const selectedOption = dom.styleSelector.options[dom.styleSelector.selectedIndex];
+        dom.styleDescription.textContent = selectedOption.dataset.desc || '';
+    }
+
+    // =================================================================
+    // INITIAL SETUP & EVENT LISTENERS
+    // =================================================================
+
+    window.onload = () => {
+        setTimeout(() => {
+            dom.loader.style.transition = 'opacity 0.8s ease-out';
+            dom.loader.style.opacity = '0';
+            setTimeout(() => {
+                dom.loader.style.display = 'none';
+                dom.glamoContent.style.display = 'block';
+                initializeTilt();
+            }, 800);
+        }, 2500);
+    };
+
+    if (dom.editForm) dom.editForm.addEventListener('submit', handleFormSubmit);
+    if (dom.suggestStyleBtn) dom.suggestStyleBtn.addEventListener('click', handleSuggestStyle);
+    if (dom.styleSelector) dom.styleSelector.addEventListener('change', handleStyleDescriptionChange);
+
+    if (dom.photoInput) {
+        dom.photoInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                // UPDATED: Store the selected file in our state variable
+                currentFile = file;
+                handlePhotoPreview(currentFile);
+            }
+            // Resetting the input value is still important for the re-upload fix
+            e.target.value = null;
+        });
+    }
 });
-
-// 📋 Copy caption
-function copyToClipboard(id) {
-  const text = document.getElementById(id).innerText;
-  navigator.clipboard.writeText(text).then(() => alert("Copied!"));
-}
-
-// 📝 Style description
-document.getElementById("styleSelector").addEventListener("change", function () {
-  const selected = this.options[this.selectedIndex];
-  document.getElementById("styleDescription").textContent = selected.getAttribute("data-desc") || "";
-});
-
-// 💬 Chat
-async function sendChat() {
-  const input = document.getElementById("chatInput");
-  const question = input.value.trim();
-  if (!question) return;
-
-  const chatBox = document.getElementById("chatBox");
-  const userMsg = document.createElement("div");
-  userMsg.innerHTML = `<strong>You:</strong> ${question}`;
-  chatBox.appendChild(userMsg);
-  input.value = "";
-
-  const typing = document.createElement("div");
-  typing.innerText = "🤖 Glamo is typing...";
-  chatBox.appendChild(typing);
-
-  try {
-    const res = await fetch("/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question }),
-    });
-    const data = await res.json();
-    typing.remove();
-    const botMsg = document.createElement("div");
-    botMsg.innerHTML = `<strong>Glamo:</strong> ${data.answer}`;
-    chatBox.appendChild(botMsg);
-    chatBox.scrollTop = chatBox.scrollHeight;
-  } catch {
-    typing.remove();
-    alert("Chat failed. Try again.");
-  }
-}
-
-function askQuick(q) {
-  document.getElementById("chatInput").value = q;
-  sendChat();
-}
-
-function toggleChatWidget() {
-  const box = document.getElementById("chatContainer");
-  box.style.display = (box.style.display === "none" || !box.style.display) ? "block" : "none";
-}
-
-// 🔮 Style/App suggestion
-async function getStyleApp() {
-  const file = document.getElementById("photo").files[0];
-  if (!file) return alert("Upload a photo first.");
-
-  const formData = new FormData();
-  const compressed = await compressImage(file);
-  formData.append("photo", compressed);
-
-  const resultDiv = document.getElementById("styleAppResult");
-  resultDiv.style.display = "block";
-  resultDiv.innerText = "⏳ Analyzing...";
-
-  try {
-    const res = await fetch("/suggest_style_app", { method: "POST", body: formData });
-    if (!res.ok) throw new Error("Failed to fetch suggestion");
-    const data = await res.json();
-    resultDiv.innerHTML = `<pre style="white-space: pre-wrap;">${data.result}</pre>`;
-  } catch {
-    resultDiv.innerText = "❌ Failed to get suggestion.";
-  }
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// // 🖼️ Compress image to webp (512px max)
-// async function compressImage(file) {
-//   if (!file) return file;
-//   return new Promise((resolve) => {
-//     const img = new Image();
-//     const reader = new FileReader();
-
-//     reader.onload = (e) => (img.src = e.target.result);
-//     reader.readAsDataURL(file);
-
-//     img.onload = () => {
-//       const max = 512;
-//       const scale = Math.min(max / img.width, max / img.height, 1);
-//       const canvas = document.createElement("canvas");
-//       canvas.width = img.width * scale;
-//       canvas.height = img.height * scale;
-//       const ctx = canvas.getContext("2d");
-//       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
-//       canvas.toBlob(
-//         (blob) => resolve(new File([blob], "compressed.webp", { type: "image/webp" })),
-//         "image/webp",
-//         0.8
-//       );
-//     };
-
-//     img.onerror = () => resolve(file); // fallback if image is invalid
-//   });
-// }
-
-// // 🎨 Lens Intro Animation with Sound
-// document.addEventListener("DOMContentLoaded", () => {
-//   const cameraLens = document.getElementById("camera-lens");
-//   const introScreen = document.getElementById("intro-screen");
-//   const glamoContent = document.getElementById("glamo-content");
-//   const shatterSound = document.getElementById("shatter-sound");
-
-//   // Unlock audio on first click
-//   window.addEventListener(
-//     "click",
-//     () => {
-//       if (shatterSound) {
-//         shatterSound.muted = true;
-//         shatterSound.play().then(() => {
-//           shatterSound.pause();
-//           shatterSound.muted = false;
-//         }).catch(() => {});
-//       }
-//     },
-//     { once: true }
-//   );
-
-//   function shatterLens() {
-//     if (!cameraLens || !introScreen || !glamoContent) return;
-
-//     const lensRect = cameraLens.getBoundingClientRect();
-//     cameraLens.style.opacity = "0";
-
-//     if (shatterSound) {
-//       shatterSound.currentTime = 0;
-//       shatterSound.play().catch(() => {});
-//     }
-
-//     const shards = 60;
-//     for (let i = 0; i < shards; i++) {
-//       const shard = document.createElement("div");
-//       shard.classList.add("shard");
-//       const size = Math.random() * 25 + 15;
-//       shard.style.width = `${size}px`;
-//       shard.style.height = `${size}px`;
-//       shard.style.left = `${lensRect.left + lensRect.width / 2 - size / 2}px`;
-//       shard.style.top = `${lensRect.top + lensRect.height / 2 - size / 2}px`;
-//       document.body.appendChild(shard);
-
-//       const angle = Math.random() * Math.PI * 2;
-//       const distance = 300 + Math.random() * 300;
-//       const dx = Math.cos(angle) * distance;
-//       const dy = Math.sin(angle) * distance;
-
-//       gsap.to(shard, {
-//         x: dx,
-//         y: dy,
-//         rotation: Math.random() * 1080,
-//         scale: Math.random() * 0.5 + 0.3,
-//         opacity: 0,
-//         duration: 2.5,
-//         ease: "power4.out",
-//         onComplete: () => shard.remove(),
-//       });
-//     }
-
-//     setTimeout(() => {
-//       introScreen.style.display = "none";
-//       glamoContent.style.display = "block";
-//     }, 2800);
-//   }
-
-//   if (cameraLens && introScreen && glamoContent) {
-//     setTimeout(shatterLens, 1200);
-//   }
-
-//   // Fade-in animations
-//   if (typeof gsap !== "undefined") {
-//     gsap.from("#heroTitle", { opacity: 0, y: -30, duration: 1 });
-//     gsap.from(".form-item", { opacity: 0, y: 30, duration: 0.8, stagger: 0.1, delay: 0.3 });
-//   }
-// });
-
-// // 📸 Preview image
-// document.getElementById("photo").addEventListener("change", function () {
-//   const preview = document.getElementById("photoPreview");
-//   if (this.files[0]) {
-//     preview.src = URL.createObjectURL(this.files[0]);
-//     preview.style.display = "block";
-//   }
-// });
-
-// // 🧠 Submit Form
-// document.getElementById("editForm").addEventListener("submit", async function (e) {
-//   e.preventDefault();
-
-//   const photoInput = document.getElementById("photo");
-//   const loading = document.getElementById("loading");
-//   const resultBlock = document.getElementById("result");
-//   const editingContainer = document.getElementById("editingValues");
-//   const captionList = document.getElementById("captionList");
-//   const allSongsDiv = document.getElementById("allSongs");
-
-//   if (!photoInput.files[0]) {
-//     alert("Please upload a photo.");
-//     return;
-//   }
-
-//   loading.classList.add("show");
-//   loading.style.display = "block";
-//   resultBlock.style.display = "none";
-
-//   try {
-//     const formData = new FormData();
-//     const compressed = await compressImage(photoInput.files[0]);
-//     formData.append("photo", compressed);
-//     formData.append("selected_app", document.querySelector("select[name='app']").value);
-//     formData.append("style", document.getElementById("styleSelector").value);
-
-//     const res = await fetch("/analyze", { method: "POST", body: formData });
-//     if (!res.ok) throw new Error("Failed to get response from server");
-
-//     const result = await res.json();
-//     document.getElementById("moodInfo").innerText = result.mood_info || "No mood data available.";
-//     editingContainer.innerHTML = "";
-//     captionList.innerHTML = "";
-//     allSongsDiv.innerHTML = "";
-
-//     // --- Editing Steps ---
-//     const rawText = result.editing_values || "";
-//     const lines = rawText.split("\n").filter(line => line.trim() !== "");
-//     const section = document.createElement("div");
-//     section.className = "edit-category";
-//     section.innerHTML = `<h3>📋 Recommended Edits</h3>`;
-
-//     let found = false;
-//     for (let i = 0; i < lines.length; i++) {
-//       const line = lines[i].trim();
-//       if (/(\bstep\s*\d+|\d+\:)/i.test(line)) {
-//         found = true;
-//         const step = line.replace(/\*\*/g, "").trim();
-//         let reason = "";
-//         for (let j = i + 1; j < i + 3 && j < lines.length; j++) {
-//           const next = lines[j].trim();
-//           if (next.toLowerCase().startsWith("reason")) {
-//             reason = next.replace(/\*\*/g, "").trim();
-//             break;
-//           }
-//         }
-
-//         const group = document.createElement("div");
-//         group.className = "edit-step-group";
-//         const stepBox = document.createElement("div");
-//         stepBox.className = "edit-step-box";
-//         stepBox.innerText = step;
-//         group.appendChild(stepBox);
-
-//         if (reason) {
-//           const reasonBox = document.createElement("div");
-//           reasonBox.className = "edit-reason-box";
-//           reasonBox.innerText = reason;
-//           group.appendChild(reasonBox);
-//         }
-
-//         section.appendChild(group);
-//       }
-//     }
-
-//     if (!found) {
-//       const fallback = document.createElement("div");
-//       fallback.className = "edit-step-box";
-//       fallback.innerText = "⚠️ No valid editing steps detected.";
-//       section.appendChild(fallback);
-//     }
-//     editingContainer.appendChild(section);
-
-//     // --- Captions ---
-//     if (Array.isArray(result.captions)) {
-//       result.captions.forEach((cap, i) => {
-//         const card = document.createElement("div");
-//         card.className = "caption-card";
-//         const id = `caption-${i}`;
-//         card.innerHTML = `<span id="${id}">${cap}</span>
-//                           <button class="copy-btn" onclick="copyToClipboard('${id}')">Copy</button>`;
-//         captionList.appendChild(card);
-//       });
-//     }
-
-//     // --- Music ---
-//     if (Array.isArray(result.songs)) {
-//       result.songs.forEach((song) => {
-//         const card = document.createElement("div");
-//         card.className = "song-card";
-//         const img = document.createElement("img");
-//         img.src = song.image || "/static/music-default.jpg";
-//         img.onerror = () => { img.src = "/static/music-default.jpg" };
-//         const title = document.createElement("div");
-//         title.className = "song-title";
-//         title.innerText = song.title || "Untitled";
-//         const artist = document.createElement("div");
-//         artist.className = "song-artist";
-//         artist.innerText = song.artist || "Unknown";
-
-//         card.append(img, title, artist);
-//         if (song.preview) {
-//           const audio = document.createElement("audio");
-//           audio.controls = true;
-//           audio.src = song.preview;
-//           card.appendChild(audio);
-//         }
-//         allSongsDiv.appendChild(card);
-//       });
-//     }
-
-//     resultBlock.style.display = "block";
-//     resultBlock.scrollIntoView({ behavior: "smooth" });
-
-//   } catch (err) {
-//     console.error("❌ Error:", err);
-//     alert("Something went wrong. Please try again.");
-//   } finally {
-//     loading.classList.remove("show");
-//     loading.style.display = "none";
-//   }
-// });
-
-// // 📋 Copy caption
-// function copyToClipboard(id) {
-//   const text = document.getElementById(id).innerText;
-//   navigator.clipboard.writeText(text).then(() => alert("Copied!"));
-// }
-
-// // 📝 Style description
-// document.getElementById("styleSelector").addEventListener("change", function () {
-//   const selected = this.options[this.selectedIndex];
-//   document.getElementById("styleDescription").textContent = selected.getAttribute("data-desc") || "";
-// });
-
-// // 💬 Chat
-// async function sendChat() {
-//   const input = document.getElementById("chatInput");
-//   const question = input.value.trim();
-//   if (!question) return;
-
-//   const chatBox = document.getElementById("chatBox");
-//   const userMsg = document.createElement("div");
-//   userMsg.innerHTML = `<strong>You:</strong> ${question}`;
-//   chatBox.appendChild(userMsg);
-//   input.value = "";
-
-//   const typing = document.createElement("div");
-//   typing.innerText = "🤖 Glamo is typing...";
-//   chatBox.appendChild(typing);
-
-//   try {
-//     const res = await fetch("/chat", {
-//       method: "POST",
-//       headers: { "Content-Type": "application/json" },
-//       body: JSON.stringify({ question }),
-//     });
-//     const data = await res.json();
-//     typing.remove();
-//     const botMsg = document.createElement("div");
-//     botMsg.innerHTML = `<strong>Glamo:</strong> ${data.answer}`;
-//     chatBox.appendChild(botMsg);
-//     chatBox.scrollTop = chatBox.scrollHeight;
-//   } catch {
-//     typing.remove();
-//     alert("Chat failed. Try again.");
-//   }
-// }
-
-// function askQuick(q) {
-//   document.getElementById("chatInput").value = q;
-//   sendChat();
-// }
-
-// function toggleChatWidget() {
-//   const box = document.getElementById("chatContainer");
-//   box.style.display = (box.style.display === "none" || !box.style.display) ? "block" : "none";
-// }
-
-// // 🔮 Style/App suggestion
-// async function getStyleApp() {
-//   const file = document.getElementById("photo").files[0];
-//   if (!file) return alert("Upload a photo first.");
-
-//   const formData = new FormData();
-//   const compressed = await compressImage(file);
-//   formData.append("photo", compressed);
-
-//   const resultDiv = document.getElementById("styleAppResult");
-//   resultDiv.style.display = "block";
-//   resultDiv.innerText = "⏳ Analyzing...";
-
-//   try {
-//     const res = await fetch("/suggest_style_app", { method: "POST", body: formData });
-//     if (!res.ok) throw new Error("Failed to fetch suggestion");
-//     const data = await res.json();
-//     resultDiv.innerHTML = `<pre style="white-space: pre-wrap;">${data.result}</pre>`;
-//   } catch {
-//     resultDiv.innerText = "❌ Failed to get suggestion.";
-//   }
-// }
-
-
-// // 🌗 Theme toggle
-// function toggleTheme() {
-//   const body = document.body;
-//   body.classList.toggle("light-mode");
-//   const theme = body.classList.contains("light-mode") ? "light" : "dark";
-//   localStorage.setItem("theme", theme);
-// }
-
-// // Load saved theme and animations
-// window.addEventListener("DOMContentLoaded", () => {
-//   const savedTheme = localStorage.getItem("theme");
-//   if (savedTheme === "light") document.body.classList.add("light-mode");
-
-//   gsap.from("#heroTitle", {
-//     opacity: 0,
-//     y: -30,
-//     duration: 1,
-//     ease: "power2.out"
-//   });
-
-//   gsap.from(".form-item", {
-//     opacity: 0,
-//     y: 30,
-//     duration: 0.8,
-//     ease: "back.out(1.7)",
-//     stagger: 0.1,
-//     delay: 0.3
-//   });
-// });
-
-// // 📸 Image preview
-// document.getElementById("photo").addEventListener("change", function () {
-//   const file = this.files[0];
-//   if (file) {
-//     const preview = document.getElementById("photoPreview");
-//     preview.src = URL.createObjectURL(file);
-//     preview.style.display = "block";
-//   }
-// });
-
-// // 🧠 Form submit handler
-// document.getElementById("editForm").addEventListener("submit", async function (e) {
-//   e.preventDefault();
-
-//   const loading = document.getElementById("loading");
-//   const resultBlock = document.getElementById("result");
-//   const editingContainer = document.getElementById("editingValues");
-//   const captionList = document.getElementById("captionList");
-//   const hindiSongsDiv = document.getElementById("hindiSongs");
-//   const englishSongsDiv = document.getElementById("englishSongs");
-
-//   loading.style.display = "block";
-//   resultBlock.style.display = "none";
-
-//   const formData = new FormData(this);
-
-//   try {
-//     const response = await fetch("/analyze", {
-//       method: "POST",
-//       body: formData
-//     });
-//     const result = await response.json();
-
-//     // 🧠 Mood Info
-//     document.getElementById("moodInfo").innerText = result.mood_info || "No analysis available.";
-//     loading.style.display = "none";
-
-//     // ✅ Editing Steps
-//     editingContainer.innerHTML = "";
-//     const rawText = result.editing_values || "";
-//     const lines = rawText.split("\n").filter(line => line.trim() !== "");
-
-//     const section = document.createElement("div");
-//     section.className = "edit-category";
-//     section.innerHTML = `<h3>📋 Recommended Edits</h3>`;
-
-//     let foundSteps = false;
-
-//     for (let i = 0; i < lines.length; i++) {
-//       const line = lines[i].trim();
-//       if (/^\**\s*(step\s*\d+|\d+:)/i.test(line)) {
-//         foundSteps = true;
-//         const stepText = line.replace(/\*\*/g, "").trim();
-//         let reasonText = "";
-
-//         for (let j = i + 1; j < i + 3 && j < lines.length; j++) {
-//           const nextLine = lines[j].trim();
-//           if (nextLine.toLowerCase().startsWith("reason")) {
-//             reasonText = nextLine.replace(/\*\*/g, "").trim();
-//             break;
-//           }
-//         }
-
-//         const group = document.createElement("div");
-//         group.className = "edit-step-group";
-
-//         const stepBox = document.createElement("div");
-//         stepBox.className = "edit-step-box";
-//         stepBox.innerText = stepText;
-//         group.appendChild(stepBox);
-
-//         if (reasonText) {
-//           const reasonBox = document.createElement("div");
-//           reasonBox.className = "edit-reason-box";
-//           reasonBox.innerText = reasonText;
-//           group.appendChild(reasonBox);
-//         }
-
-//         section.appendChild(group);
-//       }
-//     }
-
-//     if (!foundSteps) {
-//       const fallback = document.createElement("div");
-//       fallback.className = "edit-step-box";
-//       fallback.innerText = "⚠️ No valid editing steps were detected. Try again or use a different style.";
-//       section.appendChild(fallback);
-//     }
-
-//     editingContainer.appendChild(section);
-
-//     // ✅ Captions
-//     captionList.innerHTML = "";
-//     if (Array.isArray(result.captions)) {
-//       result.captions.forEach((cap, index) => {
-//         const card = document.createElement("div");
-//         card.className = "caption-card";
-//         const id = `caption-${index}`;
-//         card.innerHTML = `
-//           <span id="${id}">${cap}</span>
-//           <button class="copy-btn" onclick="copyToClipboard('${id}')">Copy</button>
-//         `;
-//         captionList.appendChild(card);
-//       });
-//     }
-
-//     // ✅ Music Suggestions
-//     hindiSongsDiv.innerHTML = "";
-//     englishSongsDiv.innerHTML = "";
-
-//     if (Array.isArray(result.songs) && result.songs.length > 0) {
-//       result.songs.forEach(song => {
-//         const card = document.createElement("div");
-//         card.className = "song-card";
-//         const img = document.createElement("img");
-//         img.src = song.cover || "/static/music-default.jpg";
-//         img.alt = "cover";
-
-//         // Fallback image
-//         img.onerror = () => {
-//           img.src = "/static/music-default.jpg";
-//         };
-
-//         const title = document.createElement("div");
-//         title.className = "song-title";
-//         title.innerText = song.title || "Untitled";
-
-//         const artist = document.createElement("div");
-//         artist.className = "song-artist";
-//         artist.innerText = song.artist || "Unknown Artist";
-
-//         card.appendChild(img);
-//         card.appendChild(title);
-//         card.appendChild(artist);
-
-//         if (song.preview) {
-//           const audio = document.createElement("audio");
-//           audio.controls = true;
-//           audio.src = song.preview;
-//           card.appendChild(audio);
-//         }
-
-//         if (song.language === "hindi") {
-//           hindiSongsDiv.appendChild(card);
-//         } else {
-//           englishSongsDiv.appendChild(card);
-//         }
-//       });
-//     } else {
-//       const fallback = document.createElement("div");
-//       fallback.className = "music-card";
-//       fallback.innerText = "🎵 No songs available.";
-//       hindiSongsDiv.appendChild(fallback);
-//       englishSongsDiv.appendChild(fallback.cloneNode(true));
-//     }
-
-//     // ✅ Reveal Result
-//     resultBlock.style.display = "block";
-//     resultBlock.scrollIntoView({ behavior: "smooth" });
-
-//   } catch (error) {
-//     console.error("❌ Error:", error);
-//     loading.style.display = "none";
-//     alert("An error occurred. Please try again.");
-//   }
-// });
-
-// // 📋 Copy caption
-// function copyToClipboard(id) {
-//   const text = document.getElementById(id).innerText;
-//   navigator.clipboard.writeText(text).then(() => alert("Copied!"));
-// }
-
-// // 📝 Style description live update
-// document.getElementById("styleSelector").addEventListener("change", function () {
-//   const selected = this.options[this.selectedIndex];
-//   document.getElementById("styleDescription").textContent = selected.getAttribute("data-desc") || "";
-// });
-
-// // 💬 Glamo Chat
-// async function sendChat() {
-//   const input = document.getElementById("chatInput");
-//   const question = input.value.trim();
-//   if (!question) return;
-
-//   const chatBox = document.getElementById("chatBox");
-
-//   const userMsg = document.createElement("div");
-//   userMsg.innerHTML = `<strong>You:</strong> ${question}`;
-//   chatBox.appendChild(userMsg);
-
-//   input.value = "";
-
-//   const typing = document.createElement("div");
-//   typing.innerText = "🤖 Glamo is typing...";
-//   chatBox.appendChild(typing);
-
-//   try {
-//     const res = await fetch("/chat", {
-//       method: "POST",
-//       headers: { "Content-Type": "application/json" },
-//       body: JSON.stringify({ question })
-//     });
-
-//     const data = await res.json();
-//     typing.remove();
-
-//     const botMsg = document.createElement("div");
-//     botMsg.innerHTML = `<strong>Glamo:</strong> ${data.answer}`;
-//     chatBox.appendChild(botMsg);
-//     chatBox.scrollTop = chatBox.scrollHeight;
-//   } catch (err) {
-//     typing.remove();
-//     alert("Chat failed. Try again.");
-//   }
-// }
-
-// // 🧠 Quick Chat
-// function askQuick(question) {
-//   document.getElementById("chatInput").value = question;
-//   sendChat();
-// }
-
-// // 💬 Toggle Chat Widget
-// function toggleChatWidget() {
-//   const box = document.getElementById("chatContainer");
-//   box.style.display = box.style.display === "none" ? "block" : "none";
-// }
-
-// // 🔮 AI Style/App Suggestion
-// async function getStyleApp() {
-//   const photoInput = document.getElementById("photo");
-//   const file = photoInput.files[0];
-
-//   if (!file) {
-//     alert("Please upload a photo first.");
-//     return;
-//   }
-
-//   const formData = new FormData();
-//   formData.append("photo", file);
-
-//   const resultDiv = document.getElementById("styleAppResult");
-//   resultDiv.style.display = "block";
-//   resultDiv.innerHTML = "⏳ Analyzing...";
-
-//   try {
-//     const res = await fetch("/suggest_style_app", {
-//       method: "POST",
-//       body: formData
-//     });
-
-//     const data = await res.json();
-//     resultDiv.innerHTML = `<pre style="white-space: pre-wrap;">${data.result}</pre>`;
-//   } catch (err) {
-//     resultDiv.innerText = "❌ Failed to get suggestion.";
-//   }
-// }

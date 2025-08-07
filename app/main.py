@@ -1,10 +1,8 @@
 import os
 import io
-import time
-import base64
+import re
 import logging
-import requests
-from fastapi import FastAPI, UploadFile, File, Form, Request
+from fastapi import FastAPI, UploadFile, File, Form, Request, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -12,22 +10,26 @@ from starlette.templating import Jinja2Templates
 from PIL import Image, UnidentifiedImageError
 
 # === Import Prompts & Utils ===
+# Import the new comprehensive analysis prompt
 from app.prompts import (
+    COMPREHENSIVE_ANALYSIS_PROMPT,
     EDITING_PROMPTS,
     get_caption_prompt,
     get_caption_validator_prompt,
     get_music_prompt,
-    MOOD_SCENE_PROMPT,
     get_chat_prompt,
     get_style_and_app_prompt
 )
 from app.gemini_utils import generate_content_async, generate_text_async
+from app.routers import music
+from app.routers.music import search_spotify_song, search_jiosaavn_song
 
 # =============================
 # 🚀 FastAPI App Initialization
 # =============================
 app = FastAPI(title="Glamo - AI Photo Editing Assistant")
 
+# ... (Keep all your app setup, middleware, static files, etc. the same) ...
 # ✅ Logging configuration
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
@@ -56,7 +58,6 @@ TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
 # ✅ Mount static files
 if os.path.isdir(STATIC_DIR):
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
-    logging.info(f"✅ Static directory mounted: {STATIC_DIR}")
 else:
     logging.warning(f"⚠️ Static folder not found -> {STATIC_DIR}")
 
@@ -66,94 +67,8 @@ if os.path.isdir(TEMPLATES_DIR):
 else:
     raise RuntimeError(f"❌ [ERROR] Templates folder not found -> {TEMPLATES_DIR}")
 
-# =============================
-# 🎵 Spotify Auth & Music Fetch
-# =============================
-SPOTIFY_CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID", "YOUR_SPOTIFY_CLIENT_ID")
-SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET", "YOUR_SPOTIFY_CLIENT_SECRET")
-SPOTIFY_TOKEN = None
-SPOTIFY_TOKEN_EXPIRY = 0
-
-
-def get_spotify_token():
-    """Fetch or refresh Spotify API token."""
-    global SPOTIFY_TOKEN, SPOTIFY_TOKEN_EXPIRY
-
-    if SPOTIFY_TOKEN and time.time() < SPOTIFY_TOKEN_EXPIRY:
-        return SPOTIFY_TOKEN
-
-    try:
-        auth_str = f"{SPOTIFY_CLIENT_ID}:{SPOTIFY_CLIENT_SECRET}"
-        b64_auth = base64.b64encode(auth_str.encode()).decode()
-
-        res = requests.post(
-            "https://accounts.spotify.com/api/token",
-            headers={"Authorization": f"Basic {b64_auth}"},
-            data={"grant_type": "client_credentials"}
-        )
-
-        if res.status_code != 200:
-            logging.warning(f"⚠️ Spotify Authentication Failed: {res.text}")
-            return None
-
-        data = res.json()
-        SPOTIFY_TOKEN = data.get("access_token")
-        SPOTIFY_TOKEN_EXPIRY = time.time() + data.get("expires_in", 3600)
-        return SPOTIFY_TOKEN
-
-    except Exception as e:
-        logging.error(f"❌ Spotify token error: {e}")
-        return None
-
-
-def search_spotify_song(query):
-    """Search for a song on Spotify."""
-    token = get_spotify_token()
-    if not token:
-        return None
-
-    try:
-        url = "https://api.spotify.com/v1/search"
-        headers = {"Authorization": f"Bearer {token}"}
-        params = {"q": query, "type": "track", "limit": 1}
-
-        res = requests.get(url, headers=headers, params=params)
-        if res.status_code == 200:
-            tracks = res.json().get("tracks", {}).get("items", [])
-            if tracks:
-                track = tracks[0]
-                return {
-                    "title": track["name"],
-                    "artist": ", ".join(a["name"] for a in track["artists"]),
-                    "image": track["album"]["images"][0]["url"] if track["album"]["images"] else "/static/music-default.jpg",
-                    "preview": track.get("preview_url")
-                }
-        else:
-            logging.warning(f"⚠️ Spotify Search Failed: {query} | {res.status_code} | {res.text}")
-    except Exception as e:
-        logging.error(f"❌ Spotify search error: {e}")
-
-    return None
-
-
-def search_jiosaavn_song(query):
-    """Search for a song on JioSaavn."""
-    try:
-        res = requests.get(f"https://saavn.dev/api/search/songs?query={query}")
-        if res.status_code == 200:
-            data = res.json()
-            if "data" in data and data["data"].get("results"):
-                song = data["data"]["results"][0]
-                return {
-                    "title": song.get("title"),
-                    "artist": song.get("primaryArtists"),
-                    "image": song["image"][-1]["link"] if song.get("image") else "/static/music-default.jpg",
-                    "link": song.get("url")
-                }
-    except Exception as e:
-        logging.warning(f"⚠️ JioSaavn Search Failed: {query} | {e}")
-
-    return None
+# ✅ Include the music router in our main app
+app.include_router(music.router)
 
 # =============================
 # 📌 Utility: Downscale image
@@ -179,99 +94,92 @@ async def home(request: Request):
         return HTMLResponse("<h2>Template not found or error rendering page.</h2>", status_code=500)
 
 # =============================
-# 🧠 Analyze Image
+# 🧠 Analyze Image (Fully Upgraded)
 # =============================
 @app.post("/analyze")
 async def analyze_image(photo: UploadFile = File(...), selected_app: str = Form(...), style: str = Form(...)):
     try:
         image_bytes = await photo.read()
         if not image_bytes:
-            return JSONResponse({"error": "No image uploaded."}, status_code=400)
+            raise HTTPException(status_code=400, detail="No image uploaded.")
 
         try:
             image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
         except UnidentifiedImageError:
-            return JSONResponse({"error": "Invalid image file."}, status_code=400)
+            raise HTTPException(status_code=400, detail="Invalid image file.")
 
         image = downscale_image(image)
 
-        # --- Mood, Scene, Colors ---
+        # --- 1. Comprehensive Image Analysis (NEW FIRST STEP) ---
         try:
-            mood_data = await generate_content_async(MOOD_SCENE_PROMPT, image=image)
-            mood, scene, colors = "Unknown", "Unknown", "Unknown"
-            for line in mood_data.splitlines():
-                if line.lower().startswith("mood:"):
-                    mood = line.split(":", 1)[1].strip()
-                elif line.lower().startswith("scene:"):
-                    scene = line.split(":", 1)[1].strip()
-                elif line.lower().startswith("colors:"):
-                    colors = line.split(":", 1)[1].strip()
+            image_analysis = await generate_content_async(COMPREHENSIVE_ANALYSIS_PROMPT, image=image)
         except Exception as e:
-            logging.error(f"❌ Mood detection failed: {e}")
-            mood_data = "Mood: Unknown\nScene: Unknown\nColors: Unknown"
-            mood, scene, colors = "Unknown", "Unknown", "Unknown"
+            logging.error(f"❌ Comprehensive analysis failed: {e}")
+            raise HTTPException(status_code=500, detail="Could not understand the image. Please try another.")
 
-        # --- Editing Suggestions ---
+        # --- 2. Editing Suggestions (Now uses analysis) ---
         try:
-            editing_prompt = EDITING_PROMPTS.get(selected_app.lower())
-            editing_text = await generate_content_async(editing_prompt(style), image=image) if editing_prompt \
-                else "Step 1: Auto Enhance – Apply\nReason: Default enhancement."
+            editing_prompt_func = EDITING_PROMPTS.get(selected_app.lower())
+            if editing_prompt_func:
+                # Pass the detailed analysis to the prompt function
+                editing_prompt = editing_prompt_func(style, image_analysis)
+                editing_text = await generate_content_async(editing_prompt, image=image)
+            else:
+                editing_text = "Step 1: Auto Enhance – Apply\nReason: Default enhancement."
         except Exception as e:
             logging.error(f"❌ Editing generation failed: {e}")
             editing_text = "Step 1: Auto Enhance – Apply\nReason: Default enhancement."
 
-        # --- Captions ---
+        # --- 3. Captions (Now uses analysis) ---
         try:
-            caption_prompt = get_caption_prompt(style, mood, scene, colors)
+            # Pass the analysis instead of separate mood, scene, colors
+            caption_prompt = get_caption_prompt(style, image_analysis)
             raw_captions = await generate_content_async(caption_prompt, image=image)
-            validator_prompt = get_caption_validator_prompt(style, mood, scene, raw_captions)
+            
+            validator_prompt = get_caption_validator_prompt(style, image_analysis, raw_captions)
             validator_result = await generate_text_async(validator_prompt)
 
-            captions = [line.strip() for line in raw_captions.splitlines() if line.strip()][:5] \
-                if "valid" in validator_result.lower() else \
-                ["#Glamo #GlowGoals #Inspo", "#VibeCheck #Glamo #Magic"]
+            if "valid" in validator_result.lower():
+                captions = [line.strip() for line in raw_captions.splitlines() if line.strip()][:5]
+            else:
+                captions = ["#Glamo #GlowGoals #Inspo", "#VibeCheck #Glamo #Magic"]
         except Exception as e:
             logging.error(f"❌ Caption generation failed: {e}")
             captions = ["#Glamo #GlowGoals #Inspo", "#VibeCheck #Glamo #Magic"]
 
-        # --- Music Suggestions ---
+        # --- 4. Music Suggestions (Now uses analysis) ---
         songs = []
+        added_song_titles = set()
         try:
-            music_prompt = get_music_prompt(mood, scene, colors)
+            # Pass the analysis for the best music context
+            music_prompt = get_music_prompt(style, image_analysis)
             music_response = await generate_content_async(music_prompt, image=image)
-            titles = [line.split("🎵 ")[1].strip() for line in music_response.splitlines() if line.startswith("🎵 ")]
-            for title in titles:
-                song = search_spotify_song(title) or search_jiosaavn_song(title)
-                if song:
+            
+            queries = re.findall(r'"([^"]+)"', music_response)
+            for query in queries:
+                if len(songs) >= 10:
+                    break
+                song = search_spotify_song(query) or search_jiosaavn_song(query)
+                if song and song.get("title") and song["title"] not in added_song_titles:
                     songs.append(song)
-
-            if len(songs) < 2:
-                songs = [
-                    {"title": "Lakshya", "artist": "Shankar Ehsaan Loy", "image": "/static/music-default.jpg"},
-                    {"title": "Zinda", "artist": "Siddharth Mahadevan", "image": "/static/music-default.jpg"}
-                ]
+                    added_song_titles.add(song["title"])
         except Exception as e:
             logging.error(f"❌ Music fetch failed: {e}")
-            songs = [
-                {"title": "Lakshya", "artist": "Shankar Ehsaan Loy", "image": "/static/music-default.jpg"},
-                {"title": "Zinda", "artist": "Siddharth Mahadevan", "image": "/static/music-default.jpg"}
-            ]
 
+        # --- 5. Final Response ---
         return JSONResponse({
             "editing_values": editing_text,
             "captions": captions,
             "songs": songs,
-            "mood_info": mood_data
+            "mood_info": image_analysis # Return the full analysis for potential frontend use
         })
 
+    except HTTPException as http_exc:
+        # Re-raise HTTP exceptions to let FastAPI handle them
+        raise http_exc
     except Exception as e:
         logging.error(f"❌ General analyze error: {e}")
-        return JSONResponse({
-            "editing_values": "Something went wrong.",
-            "captions": [],
-            "songs": [],
-            "mood_info": ""
-        }, status_code=500)
+        raise HTTPException(status_code=500, detail="An unexpected server error occurred.")
 
 # =============================
 # 💬 Chat Assistant
@@ -282,13 +190,14 @@ async def chat_endpoint(request: Request):
         data = await request.json()
         question = data.get("question", "")
         if not question:
-            return {"answer": "Please enter a question."}
+            raise HTTPException(status_code=400, detail="Please enter a question.")
+        
         prompt = get_chat_prompt(question)
         response = await generate_text_async(prompt)
         return {"answer": response.strip()}
     except Exception as e:
         logging.error(f"❌ Chat error: {e}")
-        return {"answer": "Oops! Something went wrong."}
+        raise HTTPException(status_code=500, detail="Oops! Something went wrong on our end.")
 
 # =============================
 # 🔮 Suggest Best Style & App
@@ -298,12 +207,12 @@ async def suggest_style_app(photo: UploadFile = File(...)):
     try:
         image_bytes = await photo.read()
         if not image_bytes:
-            return {"result": "No image uploaded."}
+            raise HTTPException(status_code=400, detail="No image uploaded.")
 
         try:
             image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
         except UnidentifiedImageError:
-            return {"result": "Invalid image file."}
+            raise HTTPException(status_code=400, detail="Invalid image file.")
 
         image = downscale_image(image)
         prompt = get_style_and_app_prompt()
@@ -312,15 +221,7 @@ async def suggest_style_app(photo: UploadFile = File(...)):
 
     except Exception as e:
         logging.error(f"❌ Suggest Style/App failed: {e}")
-        return {"result": "Style: Bright & Airy\nApp: iPhone Photos App\nReason: Default fallback."}
-
-
-
-
-
-
-
-
+        raise HTTPException(status_code=500, detail="Could not suggest a style. Please try another image.")
 
 
 # from flask import Flask, request, jsonify, render_template
