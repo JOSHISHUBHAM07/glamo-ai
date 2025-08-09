@@ -4,11 +4,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // STATE & DOM ELEMENTS
     // =================================================================
 
-    // NEW: A variable to hold the state of the uploaded file. This is the core of the fix.
     let currentFile = null;
 
     const dom = {
-        loader: document.getElementById('loader'),
+        // The 'loader' element is now the splash container
+        splashContainer: document.querySelector('.splash-container'),
         glamoContent: document.getElementById('glamo-content'),
         editForm: document.getElementById('editForm'),
         photoInput: document.getElementById('photo'),
@@ -233,7 +233,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function handleFormSubmit(event) {
         event.preventDefault();
-        // UPDATED: Validate using the state variable
         if (!currentFile) {
             renderError('Please upload a photo before submitting.');
             return;
@@ -242,7 +241,6 @@ document.addEventListener('DOMContentLoaded', () => {
         setLoadingState(true);
         const compressedPhoto = await compressImage(currentFile);
 
-        // Build FormData manually now
         const formData = new FormData();
         formData.append('photo', compressedPhoto);
         formData.append('selected_app', dom.editForm.elements.selected_app.value);
@@ -260,7 +258,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function handleSuggestStyle() {
-        // UPDATED: Validate using the state variable
         if (!currentFile) {
             renderError("Please upload a photo before suggesting a style.");
             return;
@@ -299,17 +296,30 @@ document.addEventListener('DOMContentLoaded', () => {
     // INITIAL SETUP & EVENT LISTENERS
     // =================================================================
 
-    window.onload = () => {
+    // --- SPLASH SCREEN LOGIC (Replaces old window.onload) ---
+    const body = document.body;
+    body.classList.add('splash-active');
+
+    setTimeout(() => {
+        if (dom.splashContainer) {
+            dom.splashContainer.style.transition = 'opacity 0.5s ease-out';
+            dom.splashContainer.style.opacity = '0';
+        }
+
         setTimeout(() => {
-            dom.loader.style.transition = 'opacity 0.8s ease-out';
-            dom.loader.style.opacity = '0';
-            setTimeout(() => {
-                dom.loader.style.display = 'none';
+            if (dom.splashContainer) {
+                dom.splashContainer.style.display = 'none';
+            }
+            body.classList.remove('splash-active');
+
+            if (dom.glamoContent) {
                 dom.glamoContent.style.display = 'block';
                 initializeTilt();
-            }, 800);
-        }, 2500);
-    };
+            }
+        }, 500);
+
+    }, 3500);
+    // --- END SPLASH SCREEN LOGIC ---
 
     if (dom.editForm) dom.editForm.addEventListener('submit', handleFormSubmit);
     if (dom.suggestStyleBtn) dom.suggestStyleBtn.addEventListener('click', handleSuggestStyle);
@@ -319,11 +329,9 @@ document.addEventListener('DOMContentLoaded', () => {
         dom.photoInput.addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (file) {
-                // UPDATED: Store the selected file in our state variable
                 currentFile = file;
                 handlePhotoPreview(currentFile);
             }
-            // Resetting the input value is still important for the re-upload fix
             e.target.value = null;
         });
     }
